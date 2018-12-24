@@ -19,8 +19,8 @@ class NCECriterion(nn.Module):
         Pnt = 1 / float(self.nLem)
         # Pnt 为 Pn(i) = 1/n
         Pns = 1 / float(self.nLem)
-        lnPmtsum = torch.cuda.FloatTensor(1).zero_()
-        lnPonsum = torch.cuda.FloatTensor(1).zero_()
+        lnPmtsum = torch.zeros(1).cuda()
+        lnPonsum = torch.zeros(1).cuda()
         min_prob_of_group = 0.001
 
         for i in range(batchSize):
@@ -30,7 +30,7 @@ class NCECriterion(nn.Module):
                     break
 
             #j =1
-            for index in range(j):
+            for index in range(0, j):
                 #if index > int(10):
                     #break
                 # eq 5.1 : P(origin=model) = Pmt / (Pmt + k*Pnt)
@@ -39,13 +39,15 @@ class NCECriterion(nn.Module):
                     Pmt_div = Pmt.add(K1 * Pnt + eps)
                     lnPmt = torch.div(Pmt, Pmt_div).log_()
                 else:
-
                     Pmt = x[i].select(0, index)
                     Z_temp = Z - x[i].select(0, 0).item() * Z + Pmt.item()
                     Pmt = Pmt * (Z / Z_temp)
-                    Pmt_div = Pmt.add(K1 * Pnt + eps)
+
+                    Pmt_div = Pmt.add(K1/64 * Pnt + eps)
                     lnPmt_temp = torch.div(Pmt, Pmt_div).log_()
                     lnPmt = torch.add(lnPmt, lnPmt_temp)
+
+                    #lnPmt = torch.add(lnPmt, torch.log(Pmt))
                 # Pmt 即公式里的 P(i|v)
 
                 if i == 0:
@@ -62,7 +64,7 @@ class NCECriterion(nn.Module):
                 #lnPon_total.add(lnPon.log_())
             '''
             # eq 5.2 : P(origin=noise) = k*Pns / (Pms + k*Pns)
-            Pon_div = x[i].narrow(0, j, int(K-j)).add(K1 * Pns + eps)
+            Pon_div = x[i].narrow(0, j, int(K-j+1)).add(K1 * Pns + eps)
             Pon = Pon_div.clone().fill_(K1 * Pns)
             lnPon = torch.div(Pon, Pon_div)
             lnPon.log_()
@@ -83,4 +85,3 @@ class NCECriterion(nn.Module):
         loss = - (lnPmtsum + lnPonsum )/ batchSize
         # loss = -E{log(h(i|v))} - E{log(1 - h(i|v'))}
         return loss
-
