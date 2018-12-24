@@ -4,24 +4,24 @@ from torch import nn
 eps = 1e-7
 
 
-class NCEGroupCriterion(nn.Module):
+class NCECriterion(nn.Module):
 
     def __init__(self, nLem):
-        super(NCEGroupCriterion, self).__init__()
+        super(NCECriterion, self).__init__()
         self.nLem = nLem
 
-    def forward(self, x, targets):
+    def forward(self, x, targets, Z):
         batchSize = x.size(0)
         K = x.size(1) - 1
-        K1 = 100
+        K1 = 4096
         # x.size() 包括了positive和negative samples的数目。
         # K为 negative sample 的数目。
         Pnt = 1 / float(self.nLem)
         # Pnt 为 Pn(i) = 1/n
         Pns = 1 / float(self.nLem)
-        lnPmtsum = 0
-        lnPonsum = 0
-        min_prob_of_group = 0.003
+        lnPmtsum = torch.cuda.FloatTensor(1).zero_()
+        lnPonsum = torch.cuda.FloatTensor(1).zero_()
+        min_prob_of_group = 0.001
 
         for i in range(batchSize):
 
@@ -39,7 +39,10 @@ class NCEGroupCriterion(nn.Module):
                     Pmt_div = Pmt.add(K1 * Pnt + eps)
                     lnPmt = torch.div(Pmt, Pmt_div).log_()
                 else:
+
                     Pmt = x[i].select(0, index)
+                    Z_temp = Z - x[i].select(0, 0).item() * Z + Pmt.item()
+                    Pmt = Pmt * (Z / Z_temp)
                     Pmt_div = Pmt.add(K1 * Pnt + eps)
                     lnPmt_temp = torch.div(Pmt, Pmt_div).log_()
                     lnPmt = torch.add(lnPmt, lnPmt_temp)
